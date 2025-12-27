@@ -79,6 +79,8 @@
                 <select id="sort-by">
                     <option value="newest">Newest First</option>
                     <option value="oldest">Oldest First</option>
+                    <option value="name-asc">Name (A-Z)</option>
+                    <option value="name-desc">Name (Z-A)</option>
                     <option value="amt-high">Amount (High → Low)</option>
                     <option value="amt-low">Amount (Low → High)</option>
                 </select>
@@ -164,11 +166,18 @@
 
             // 2. Sort
             processed.sort((a, b) => {
+                const nameA = a.customers?.name || '';
+                const nameB = b.customers?.name || '';
+
                 switch(sortValue) {
                     case 'newest': 
                         return new Date(b.start_date) - new Date(a.start_date);
                     case 'oldest': 
                         return new Date(a.start_date) - new Date(b.start_date);
+                    case 'name-asc':
+                        return nameA.localeCompare(nameB);
+                    case 'name-desc':
+                        return nameB.localeCompare(nameA);
                     case 'amt-high': 
                         return b.principal_amount - a.principal_amount;
                     case 'amt-low': 
