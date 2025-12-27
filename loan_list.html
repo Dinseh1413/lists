@@ -4,58 +4,218 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Loan List</title>
+    
     <link rel="stylesheet" href="style.css">
+
+    <style>
+        /* Controls Grid: Stack on mobile, side-by-side on desktop */
+        .controls-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            background: var(--card-bg);
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+        }
+
+        @media (min-width: 600px) {
+            .controls-container {
+                grid-template-columns: 2fr 1fr 1fr; /* Search gets more space */
+            }
+        }
+
+        /* Status Badges */
+        .status-badge {
+            font-size: 0.8rem;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .status-Active {
+            background-color: #e8f5e9; /* Light Green */
+            color: var(--success-color);
+        }
+        .status-Closed {
+            background-color: #f5f5f5; /* Light Gray */
+            color: var(--text-light);
+        }
+        
+        /* Loan Card Typography */
+        .loan-amount {
+            font-family: monospace;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--text-color);
+        }
+    </style>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase.js"></script>
     <script src="utils.js"></script>
 </head>
 <body>
+
     <main class="container">
         <h1>Loan List</h1>
-        <div class="form-group">
-            <input type="search" id="search" placeholder="Search customer name...">
-        </div>
-        <div id="list-container">Loading...</div>
-    </main>
-    <nav class="bottom-nav">
-        <a href="dashboard.html" class="nav-item"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg> Dashboard</a>
-        <a href="loan_list.html" class="nav-item active"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg> Loans</a>
-        <a href="customer_list.html" class="nav-item"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg> Customers</a>
-        <a href="pj.html" class="nav-item"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg> PJ List</a>
-    </nav>
-    <script>
-        let allLoans = [];
-        const container = document.getElementById('list-container');
 
-        async function init() {
-            const { data, error } = await sbClient.from('loans')
-                .select('id, principal_amount, start_date, status, customers(name)')
-                .order('start_date', { ascending: false });
-            
-            if (data) {
-                allLoans = data;
-                render();
+        <section class="controls-container">
+            <div class="form-group">
+                <label for="search">Search Customer</label>
+                <input type="search" id="search" placeholder="e.g. Rajesh">
+            </div>
+            <div class="form-group">
+                <label for="filter-status">Status</label>
+                <select id="filter-status">
+                    <option value="All">All Statuses</option>
+                    <option value="Active">Active</option>
+                    <option value="Closed">Closed</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="sort-by">Sort By</label>
+                <select id="sort-by">
+                    <option value="newest">Newest First</option>
+                    <option value="oldest">Oldest First</option>
+                    <option value="amt-high">Amount (High → Low)</option>
+                    <option value="amt-low">Amount (Low → High)</option>
+                </select>
+            </div>
+        </section>
+
+        <div id="list-container">
+            <p style="text-align: center; padding: 20px; color: #888;">Loading loans...</p>
+        </div>
+    </main>
+
+    <nav class="bottom-nav">
+        <a href="dashboard.html" class="nav-item">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+            Dashboard
+        </a>
+        <a href="loan_list.html" class="nav-item active">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+            Loans
+        </a>
+        <a href="customer_list.html" class="nav-item">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            Customers
+        </a>
+        <a href="pj.html" class="nav-item">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+            PJ List
+        </a>
+    </nav>
+
+    <div id="toast-container"></div>
+
+    <script>
+        // --- 1. STATE & DOM ---
+        let allLoans = []; // Master list
+        const dom = {
+            container: document.getElementById('list-container'),
+            search: document.getElementById('search'),
+            filter: document.getElementById('filter-status'),
+            sort: document.getElementById('sort-by')
+        };
+
+        // --- 2. LOGIC ---
+
+        async function loadLoans() {
+            try {
+                // Fetch basic loan data + customer name
+                const { data, error } = await sbClient
+                    .from('loans')
+                    .select(`
+                        id,
+                        principal_amount,
+                        start_date,
+                        status,
+                        customers ( name ) 
+                    `)
+                    .order('start_date', { ascending: false }); // Default fetch order
+
+                if (error) throw error;
+
+                allLoans = data || [];
+                renderList();
+
+            } catch (err) {
+                console.error(err);
+                dom.container.innerHTML = `<p style="text-align:center; color:red;">Error loading loans.</p>`;
             }
         }
 
-        function render(filter = '') {
-            const filtered = allLoans.filter(l => l.customers.name.toLowerCase().includes(filter.toLowerCase()));
-            container.innerHTML = filtered.map(l => `
-                <a href="loan_details.html?id=${l.id}" class="list-item">
-                    <div>
-                        <div style="font-weight:600; font-size:1.1rem;">${l.customers.name}</div>
-                        <div style="font-size:0.85rem; color:#777;">${dateFormatter(l.start_date)}</div>
+        function renderList() {
+            // Get current values
+            const searchTerm = dom.search.value.toLowerCase();
+            const statusValue = dom.filter.value;
+            const sortValue = dom.sort.value;
+
+            // 1. Filter
+            let processed = allLoans.filter(loan => {
+                const customerName = loan.customers?.name?.toLowerCase() || '';
+                const matchesSearch = customerName.includes(searchTerm);
+                const matchesStatus = statusValue === 'All' || loan.status === statusValue;
+                return matchesSearch && matchesStatus;
+            });
+
+            // 2. Sort
+            processed.sort((a, b) => {
+                switch(sortValue) {
+                    case 'newest': 
+                        return new Date(b.start_date) - new Date(a.start_date);
+                    case 'oldest': 
+                        return new Date(a.start_date) - new Date(b.start_date);
+                    case 'amt-high': 
+                        return b.principal_amount - a.principal_amount;
+                    case 'amt-low': 
+                        return a.principal_amount - b.principal_amount;
+                    default: return 0;
+                }
+            });
+
+            // 3. Render HTML
+            if (processed.length === 0) {
+                dom.container.innerHTML = '<p style="text-align: center; color: var(--text-light); margin-top:20px;">No loans found.</p>';
+                return;
+            }
+
+            dom.container.innerHTML = processed.map(loan => {
+                const customerName = loan.customers ? loan.customers.name : 'Unknown';
+                const statusClass = loan.status === 'Active' ? 'status-Active' : 'status-Closed';
+                
+                return `
+                <a href="loan_details.html?id=${loan.id}" class="list-item">
+                    <div style="flex-grow: 1;">
+                        <div style="font-weight: 600; font-size: 1.05rem; margin-bottom: 4px;">${customerName}</div>
+                        <div style="font-size: 0.85rem; color: var(--text-light);">
+                            Started: ${dateFormatter(loan.start_date)}
+                        </div>
                     </div>
-                    <div style="text-align:right;">
-                        <div style="font-weight:bold;">${currencyFormatter.format(l.principal_amount)}</div>
-                        <span style="font-size:0.8rem; padding:2px 8px; border-radius:10px; background:${l.status==='Active'?'#e8f5e9':'#eee'}; color:${l.status==='Active'?'#388e3c':'#777'};">${l.status}</span>
+                    <div style="text-align: right; min-width: 100px;">
+                        <div class="loan-amount">${currencyFormatter.format(loan.principal_amount)}</div>
+                        <div style="margin-top: 6px;">
+                            <span class="status-badge ${statusClass}">${loan.status}</span>
+                        </div>
                     </div>
                 </a>
-            `).join('');
+                `;
+            }).join('');
         }
 
-        document.getElementById('search').addEventListener('input', (e) => render(e.target.value));
-        init();
+        // --- 3. INIT & EVENTS ---
+        
+        // Add listeners to re-render when any control changes
+        dom.search.addEventListener('input', renderList);
+        dom.filter.addEventListener('change', renderList);
+        dom.sort.addEventListener('change', renderList);
+
+        // Initial Load
+        document.addEventListener('DOMContentLoaded', loadLoans);
+
     </script>
 </body>
 </html>
