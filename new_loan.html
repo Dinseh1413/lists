@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create New Loan</title>
+    
+    <link rel="stylesheet" href="style.css">
+    
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.default.css" rel="stylesheet">
+    
+    <style>
+        /* Form Grid Layout */
+        .form-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
+        }
+        
+        /* Tom Select Customization to match style.css */
+        .ts-control {
+            border: 1px solid var(--border-color);
+            border-radius: 8px; padding: 0.8rem; font-size: 1rem;
+            background: #fff; box-shadow: none;
+        }
+        .ts-wrapper.focus .ts-control {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px var(--primary-light);
+        }
+        
+        /* Toggle Section */
+        #new-customer-section {
+            display: none; /* Hidden by default */
+            background-color: #f9f9f9; padding: 1rem;
+            border-radius: 8px; border: 1px dashed var(--border-color);
+            margin-bottom: 1rem;
+        }
+        
+        .toggle-link {
+            font-size: 0.9rem; color: var(--primary-color);
+            text-decoration: none; font-weight: 600; cursor: pointer;
+            display: inline-block; margin-top: 0.5rem;
+        }
+        .toggle-link:hover { text-decoration: underline; }
+
+        @media (max-width: 600px) {
+            .form-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+    <script src="supabase.js"></script>
+    <script src="utils.js"></script>
+</head>
+<body>
+
+    <main class="container">
+        <h1>Create New Loan</h1>
+
+        <section class="form-card">
+            <form id="new-loan-form">
+                
+                <div id="select-customer-section" class="form-group">
+                    <label>Select Customer (Type to search)</label>
+                    <select id="customer-select" required placeholder="Loading customers...">
+                        <option value="">Loading...</option>
+                    </select>
+                    <a href="#" id="show-new-customer-btn" class="toggle-link">+ Create New Customer</a>
+                </div>
+                
+                <div id="new-customer-section">
+                    <h3 style="margin-bottom: 1rem; color: var(--primary-color);">New Customer Details</h3>
+                    <div class="form-group">
+                        <label>Full Name</label>
+                        <input type="text" id="new-customer-name">
+                    </div>
+                    <div class="form-group">
+                        <label>Phone</label>
+                        <input type="tel" id="new-customer-phone">
+                    </div>
+                    <div class="form-group">
+                        <label>Address (Optional)</label>
+                        <input type="text" id="new-customer-address">
+                    </div>
+                    <a href="#" id="cancel-new-customer-btn" class="toggle-link" style="color: var(--secondary-color);">Cancel</a>
+                </div>
+
+                <h2 style="margin-top: 1.5rem;">Loan Details</h2>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Principal Amount (₹)</label>
+                        <input type="number" id="principal-amount" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Interest Rate (% p.a.)</label>
+                        <input type="number" id="interest-rate" step="0.01" placeholder="e.g., 24" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Start Date</label>
+                        <input type="date" id="start-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Articles</label>
+                        <input type="text" id="articles" placeholder="e.g., 2x Gold Bangles">
+                    </div>
+                    <div class="form-group">
+                        <label>Gross Weight (g)</label>
+                        <input type="number" id="gross-weight" step="0.01" placeholder="e.g., 10.5">
+                    </div>
+                    <div class="form-group">
+                        <label>Net Weight (g)</label>
+                        <input type="number" id="net-weight" step="0.01" placeholder="e.g., 10.2">
+                    </div>
+                </div>
+                
+                <button type="submit" id="create-btn" class="btn-primary" style="margin-top: 1.5rem;">Create Loan</button>
+            </form>
+        </section>
+    </main>
+    
+    <nav class="bottom-nav">
+        <a href="dashboard.html" class="nav-item">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+            Dashboard
+        </a>
+        <a href="loan_list.html" class="nav-item">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+            Loans
+        </a>
+        <a href="customer_list.html" class="nav-item">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            Customers
+        </a>
+        <a href="pj.html" class="nav-item">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+            PJ List
+        </a>
+    </nav>
+
+    <div id="toast-container"></div>
+
+    <script>
+        // --- 1. STATE & DOM ---
+        let tomSelectInstance = null;
+        
+        const dom = {
+            form: document.getElementById('new-loan-form'),
+            createBtn: document.getElementById('create-btn'),
+            
+            // Toggle Sections
+            selectSection: document.getElementById('select-customer-section'),
+            newSection: document.getElementById('new-customer-section'),
+            customerSelect: document.getElementById('customer-select'),
+            
+            // Buttons
+            showNewBtn: document.getElementById('show-new-customer-btn'),
+            cancelNewBtn: document.getElementById('cancel-new-customer-btn'),
+            
+            // Inputs
+            newName: document.getElementById('new-customer-name'),
+            newPhone: document.getElementById('new-customer-phone'),
+            newAddr: document.getElementById('new-customer-address'),
+            principal: document.getElementById('principal-amount'),
+            rate: document.getElementById('interest-rate'),
+            date: document.getElementById('start-date'),
+            articles: document.getElementById('articles'),
+            gross: document.getElementById('gross-weight'),
+            net: document.getElementById('net-weight')
+        };
+
+        // --- 2. LOGIC ---
+        
+        async function loadCustomers() {
+            const { data, error } = await sbClient
+                .from('customers')
+                .select('id, name, phone')
+                .order('name', { ascending: true });
+
+            if (error) {
+                showToast('Error loading customers: ' + error.message, 'error');
+                return;
+            }
+
+            const options = data.map(c => ({
+                value: c.id,
+                text: c.name,
+                phone: c.phone || ''
+            }));
+
+            // Initialize Tom Select
+            tomSelectInstance = new TomSelect(dom.customerSelect, {
+                options: options,
+                searchField: ['text', 'phone'],
+                placeholder: 'Select existing customer...',
+                maxItems: 1,
+                render: {
+                    option: function(data, escape) {
+                        return `<div>
+                            <div style="font-weight:600;">${escape(data.text)}</div>
+                            <div style="font-size:0.8rem; color:#777;">${escape(data.phone)}</div>
+                        </div>`;
+                    },
+                    item: function(data, escape) {
+                        return `<div>${escape(data.text)}</div>`;
+                    }
+                }
+            });
+            tomSelectInstance.clear(); // Ensure placeholder shows
+        }
+
+        function toggleMode(isNew) {
+            if (isNew) {
+                dom.selectSection.style.display = 'none';
+                dom.newSection.style.display = 'block';
+                dom.customerSelect.required = false;
+                dom.newName.required = true;
+                if(tomSelectInstance) tomSelectInstance.disable();
+            } else {
+                dom.selectSection.style.display = 'block';
+                dom.newSection.style.display = 'none';
+                dom.customerSelect.required = true;
+                dom.newName.required = false;
+                if(tomSelectInstance) tomSelectInstance.enable();
+            }
+        }
+
+        async function handleSubmit(e) {
+            e.preventDefault();
+            dom.createBtn.disabled = true;
+            dom.createBtn.textContent = 'Creating...';
+
+            let customerId = null;
+
+            try {
+                // 1. Get or Create Customer
+                if (dom.newSection.style.display === 'block') {
+                    // Create New
+                    const { data: newCust, error: custErr } = await sbClient
+                        .from('customers')
+                        .insert({
+                            name: dom.newName.value,
+                            phone: dom.newPhone.value || null,
+                            address: dom.newAddr.value || null
+                        })
+                        .select('id')
+                        .single();
+                    
+                    if (custErr) throw new Error(custErr.message);
+                    customerId = newCust.id;
+                } else {
+                    // Use Existing
+                    customerId = dom.customerSelect.value;
+                    if (!customerId) throw new Error("Please select a customer.");
+                }
+
+                // 2. Insert Loan
+                const { error: loanErr } = await sbClient
+                    .from('loans')
+                    .insert({
+                        customer_id: customerId,
+                        principal_amount: dom.principal.value,
+                        interest_rate: dom.rate.value,
+                        start_date: dom.date.value,
+                        articles: dom.articles.value || null,
+                        gross: dom.gross.value || null,
+                        net: dom.net.value || null,
+                        status: 'Active'
+                    });
+
+                if (loanErr) throw new Error(loanErr.message);
+
+                // Success
+                showToast('Loan created successfully!', 'success');
+                setTimeout(() => window.location.href = 'loan_list.html', 1000);
+
+            } catch (err) {
+                showToast(err.message, 'error');
+                dom.createBtn.disabled = false;
+                dom.createBtn.textContent = 'Create Loan';
+            }
+        }
+
+        // --- 3. INIT ---
+        dom.showNewBtn.addEventListener('click', (e) => { e.preventDefault(); toggleMode(true); });
+        dom.cancelNewBtn.addEventListener('click', (e) => { e.preventDefault(); toggleMode(false); });
+        dom.form.addEventListener('submit', handleSubmit);
+        
+        // Default date to today
+        dom.date.value = new Date().toISOString().split('T')[0];
+        
+        loadCustomers();
+
+    </script>
+</body>
+</html>
