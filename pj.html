@@ -8,25 +8,44 @@
     <link rel="stylesheet" href="style.css">
 
     <style>
+        /* Controls Grid */
+        .controls-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            background: var(--card-bg);
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+        }
+
+        @media (min-width: 600px) {
+            .controls-container {
+                grid-template-columns: 1fr 1fr 1fr;
+            }
+        }
+
         /* Responsive Table Wrapper */
         .table-wrapper {
             background: var(--card-bg);
             border-radius: var(--border-radius);
             box-shadow: var(--shadow);
-            overflow-x: auto; /* Horizontal scroll on mobile */
+            overflow-x: auto; 
             -webkit-overflow-scrolling: touch;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 600px; /* Force width to ensure readability */
+            min-width: 600px; 
         }
 
         th, td {
             padding: 1rem;
             text-align: left;
             border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
         }
 
         th {
@@ -40,17 +59,35 @@
 
         td { font-size: 0.95rem; }
 
-        /* Highlight specific columns */
         .col-money { font-family: monospace; font-weight: 600; }
         .col-interest { color: var(--primary-color); }
-        
-        /* Status Badges */
-        .status-badge {
-            font-size: 0.8rem; padding: 4px 10px; border-radius: 12px; font-weight: 600;
+
+        /* Status Dropdown Styling */
+        .status-select {
+            padding: 6px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            border: 1px solid transparent;
+            cursor: pointer;
+            appearance: none; /* Removes default arrow on some browsers for cleaner look */
+            -webkit-appearance: none;
+            text-align: center;
         }
-        .status-Active { background: #e8f5e9; color: var(--success-color); }
-        .status-Pending { background: #fff3e0; color: #f57c00; }
-        .status-Closed { background: #f5f5f5; color: var(--text-light); }
+        
+        .status-select:focus { outline: none; box-shadow: 0 0 0 2px var(--primary-light); }
+
+        .status-select.Active {
+            background-color: #e8f5e9;
+            color: var(--success-color);
+            border-color: #c8e6c9;
+        }
+        
+        .status-select.Closed {
+            background-color: #f5f5f5;
+            color: var(--text-light);
+            border-color: #e0e0e0;
+        }
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -67,6 +104,30 @@
                 Live
             </div>
         </div>
+
+        <section class="controls-container">
+            <div class="form-group" style="margin-bottom:0;">
+                <label for="search">Search ID</label>
+                <input type="search" id="search" placeholder="e.g. 123">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+                <label for="filter-status">Filter Status</label>
+                <select id="filter-status">
+                    <option value="All">All Statuses</option>
+                    <option value="Active">Active Only</option>
+                    <option value="Closed">Closed Only</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+                <label for="sort-by">Sort By</label>
+                <select id="sort-by">
+                    <option value="newest">Newest First</option>
+                    <option value="oldest">Oldest First</option>
+                    <option value="amt-high">Amount (High → Low)</option>
+                    <option value="amt-low">Amount (Low → High)</option>
+                </select>
+            </div>
+        </section>
 
         <div class="table-wrapper">
             <table>
@@ -112,14 +173,18 @@
         const PJ_ANNUAL_RATE = 0.156; // 15.6%
         const PJ_MONTHLY_RATE = PJ_ANNUAL_RATE / 12;
 
+        let allPJ = []; // Master list
+
         const dom = {
             tbody: document.getElementById('pj-body'),
-            liveIndicator: document.getElementById('live-indicator')
+            liveIndicator: document.getElementById('live-indicator'),
+            search: document.getElementById('search'),
+            filter: document.getElementById('filter-status'),
+            sort: document.getElementById('sort-by')
         };
 
-        // --- LOGIC ---
+        // --- 1. LOGIC ---
 
-        // Custom Interest Month Logic (15-day rule)
         function calculateInterestMonths(startDateStr) {
             const parts = startDateStr.split('-');
             const start = new Date(parts[0], parts[1] - 1, parts[2]);
@@ -134,51 +199,19 @@
             let days = today.getDate() - start.getDate();
             let totalMonths = years * 12 + months;
 
-            if (days < 0) {
-                totalMonths--;
-                // Get days in prev month to calculate remaining days if needed
-                // But specifically for the rule "if days < 0... check remaining"
-                // Let's stick to the simpler rule logic derived previously:
-            }
+            if (days < 0) totalMonths--;
 
-            // Recalculate strict day difference for the "15 day" logic
-            // (Simplifying to ensure consistent logic with your previous request)
-            const daysInPeriod = Math.floor((today - start) / (1000 * 60 * 60 * 24));
-            
-            if (totalMonths <= 0) return 1; // Minimum 1 month
-
-            // Check the "days" remainder logic
-            // If we have full months passed, check how many days into the *next* month we are
-            // Actually, using the 'days' variable from above:
-            // If days < 0, we already subtracted a month.
-            // So we need to check the partial month days.
-            
-            // Let's use the logic that worked in your original file:
-            /* If totalMonths == 0 -> 1.
-               Else check days. 
-               If days < 15 -> +0.5
-               Else -> +1 
-            */
-            // Note: The 'days' variable above is (Today - Start). 
-            // If Today is 20th and Start is 5th, days = 15.
-            // If Today is 5th and Start is 20th, days = -15 (and totalMonths reduced).
-            
-            // To properly implement "less than 15 days completed":
-            let extraDays = 0;
             const tempDate = new Date(start);
             tempDate.setMonth(tempDate.getMonth() + totalMonths);
-            
-            // Calculate days between tempDate (start + full months) and today
             const diffTime = Math.abs(today - tempDate);
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
             
-            if (diffDays > 0) {
-                if (diffDays < 15) return totalMonths + 0.5;
-                else return totalMonths + 1;
-            }
-            
-            return totalMonths;
+            if (totalMonths <= 0) return 1;
+            if (diffDays < 15) return totalMonths + 0.5;
+            else return totalMonths + 1;
         }
+
+        // --- 2. DATA LOADING & RENDERING ---
 
         async function loadPJ(isUpdate = false) {
             try {
@@ -188,41 +221,106 @@
                     .order('date', { ascending: false });
 
                 if (error) throw error;
-
-                if (!data || data.length === 0) {
-                    dom.tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">No records found.</td></tr>';
-                    return;
-                }
-
-                dom.tbody.innerHTML = data.map(item => {
-                    const principal = parseFloat(item.amount);
-                    let interest = 0;
-                    let months = 0;
-                    
-                    if (item.status === 'Active') {
-                        months = calculateInterestMonths(item.date);
-                        interest = principal * PJ_MONTHLY_RATE * months;
-                    }
-
-                    return `
-                    <tr>
-                        <td>#${item.pj_id}</td>
-                        <td>${dateFormatter(item.date)}</td>
-                        <td class="col-money">${currencyFormatter.format(principal)}</td>
-                        <td>${months > 0 ? months : '-'}</td>
-                        <td class="col-money col-interest">${interest > 0 ? currencyFormatter.format(interest) : '-'}</td>
-                        <td><span class="status-badge status-${item.status}">${item.status}</span></td>
-                    </tr>`;
-                }).join('');
+                
+                allPJ = data || [];
+                renderList();
 
                 if (isUpdate) {
                     dom.liveIndicator.style.opacity = '1';
                     setTimeout(() => { dom.liveIndicator.style.opacity = '0'; }, 2000);
                 }
-
             } catch (err) {
                 console.error(err);
                 if(!isUpdate) dom.tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Error loading data.</td></tr>';
+            }
+        }
+
+        function renderList() {
+            const term = dom.search.value.toLowerCase();
+            const statusVal = dom.filter.value;
+            const sortVal = dom.sort.value;
+
+            // 1. Filter
+            let processed = allPJ.filter(item => {
+                const idMatch = String(item.pj_id).includes(term);
+                const statusMatch = statusVal === 'All' || item.status === statusVal;
+                return idMatch && statusMatch;
+            });
+
+            // 2. Sort
+            processed.sort((a, b) => {
+                if (sortVal === 'newest') return new Date(b.date) - new Date(a.date);
+                if (sortVal === 'oldest') return new Date(a.date) - new Date(b.date);
+                if (sortVal === 'amt-high') return parseFloat(b.amount) - parseFloat(a.amount);
+                if (sortVal === 'amt-low') return parseFloat(a.amount) - parseFloat(b.amount);
+                return 0;
+            });
+
+            // 3. Render
+            if (processed.length === 0) {
+                dom.tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">No matching records.</td></tr>';
+                return;
+            }
+
+            dom.tbody.innerHTML = processed.map(item => {
+                const principal = parseFloat(item.amount);
+                let interest = 0;
+                let months = 0;
+                
+                // Only calculate interest if active
+                if (item.status === 'Active') {
+                    months = calculateInterestMonths(item.date);
+                    interest = principal * PJ_MONTHLY_RATE * months;
+                }
+
+                return `
+                <tr>
+                    <td>#${item.pj_id}</td>
+                    <td>${dateFormatter(item.date)}</td>
+                    <td class="col-money">${currencyFormatter.format(principal)}</td>
+                    <td>${item.status === 'Active' ? months : '-'}</td>
+                    <td class="col-money col-interest">${item.status === 'Active' ? currencyFormatter.format(interest) : '-'}</td>
+                    <td>
+                        <select 
+                            class="status-select ${item.status}" 
+                            onchange="updateStatus(${item.pj_id}, this.value)"
+                        >
+                            <option value="Active" ${item.status === 'Active' ? 'selected' : ''}>Active</option>
+                            <option value="Closed" ${item.status === 'Closed' ? 'selected' : ''}>Closed</option>
+                        </select>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        // --- 3. ACTIONS ---
+
+        // Exposed global function for the onchange event
+        window.updateStatus = async (id, newStatus) => {
+            const confirmMsg = `Are you sure you want to mark PJ #${id} as ${newStatus}?`;
+            if(!confirm(confirmMsg)) {
+                // Revert selection if canceled (simple reload easier)
+                renderList(); 
+                return;
+            }
+
+            try {
+                const { error } = await sbClient
+                    .from('pj')
+                    .update({ status: newStatus })
+                    .eq('pj_id', id);
+
+                if (error) throw error;
+                
+                showToast(`PJ #${id} marked as ${newStatus}`);
+                // Realtime listener will auto-refresh, but we can update locally for speed
+                const idx = allPJ.findIndex(p => p.pj_id === id);
+                if(idx !== -1) allPJ[idx].status = newStatus;
+                renderList();
+
+            } catch (err) {
+                showToast(err.message, 'error');
+                renderList(); // Revert UI on error
             }
         }
 
@@ -232,6 +330,11 @@
                 () => loadPJ(true))
                 .subscribe();
         }
+
+        // --- 4. INIT ---
+        dom.search.addEventListener('input', renderList);
+        dom.filter.addEventListener('change', renderList);
+        dom.sort.addEventListener('change', renderList);
 
         document.addEventListener('DOMContentLoaded', () => {
             loadPJ();
