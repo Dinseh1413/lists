@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer List</title>
+    
+    <link rel="stylesheet" href="style.css">
+
+    <style>
+        .controls-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            background: var(--card-bg);
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+        }
+
+        @media (min-width: 600px) {
+            .controls-container {
+                grid-template-columns: 2fr 1fr;
+            }
+        }
+        
+        .customer-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: var(--card-bg);
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            text-decoration: none;
+            color: inherit;
+            box-shadow: var(--shadow);
+            transition: transform 0.2s;
+        }
+        
+        .customer-card:active {
+            transform: scale(0.98);
+        }
+
+        .phone-text {
+            color: var(--text-light);
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 4px;
+        }
+    </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase.js"></script>
+    <script src="utils.js"></script>
+</head>
+<body>
+
+    <main class="container">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h1 style="margin: 0;">Customers</h1>
+            <div id="live-indicator" style="font-size: 0.8rem; color: var(--success-color); display: flex; align-items: center; gap: 5px; opacity: 0; transition: opacity 0.5s;">
+                <span style="width: 8px; height: 8px; background: var(--success-color); border-radius: 50%;"></span>
+                Live
+            </div>
+        </div>
+
+        <section class="controls-container">
+            <div class="form-group">
+                <label for="search">Search</label>
+                <input type="search" id="search" placeholder="Name or Phone...">
+            </div>
+            <div class="form-group">
+                <label for="sort-by">Sort By</label>
+                <select id="sort-by">
+                    <option value="name-asc">Name (A-Z)</option>
+                    <option value="name-desc">Name (Z-A)</option>
+                </select>
+            </div>
+        </section>
+
+        <div id="list-container">
+            <p style="text-align: center; padding: 20px; color: #888;">Loading customers...</p>
+        </div>
+    </main>
+
+    <nav class="bottom-nav">
+        <a href="dashboard.html" class="nav-item">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+            Dashboard
+        </a>
+        <a href="loan_list.html" class="nav-item">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+            Loans
+        </a>
+        <a href="customer_list.html" class="nav-item active">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            Customers
+        </a>
+        <a href="pj.html" class="nav-item">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+            PJ List
+        </a>
+    </nav>
+
+    <div id="toast-container"></div>
+
+    <script>
+        // --- 1. STATE & DOM ---
+        let allCustomers = [];
+        const dom = {
+            container: document.getElementById('list-container'),
+            search: document.getElementById('search'),
+            sort: document.getElementById('sort-by'),
+            liveIndicator: document.getElementById('live-indicator')
+        };
+
+        // --- 2. LOGIC ---
+        
+        async function loadCustomers(isUpdate = false) {
+            try {
+                const { data, error } = await sbClient
+                    .from('customers')
+                    .select('*')
+                    .order('name', { ascending: true });
+
+                if (error) throw error;
+
+                allCustomers = data || [];
+                renderList();
+
+                if (isUpdate) {
+                    dom.liveIndicator.style.opacity = '1';
+                    setTimeout(() => { dom.liveIndicator.style.opacity = '0'; }, 2000);
+                }
+
+            } catch (err) {
+                console.error(err);
+                if (!isUpdate) dom.container.innerHTML = '<p style="text-align: center; color: red;">Error loading customers.</p>';
+            }
+        }
+
+        function setupRealtime() {
+            sbClient.channel('customer-list-updates')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, 
+                () => loadCustomers(true))
+                .subscribe();
+        }
+
+        function renderList() {
+            const term = dom.search.value.toLowerCase();
+            const sortVal = dom.sort.value;
+
+            // 1. Filter (Name OR Phone)
+            let processed = allCustomers.filter(c => {
+                const nameMatch = c.name.toLowerCase().includes(term);
+                const phoneMatch = (c.phone || '').includes(term);
+                return nameMatch || phoneMatch;
+            });
+
+            // 2. Sort
+            processed.sort((a, b) => {
+                const nameA = a.name.toLowerCase();
+                const nameB = b.name.toLowerCase();
+                return sortVal === 'name-asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+            });
+
+            // 3. Render
+            if (processed.length === 0) {
+                dom.container.innerHTML = '<p style="text-align: center; color: var(--text-light); margin-top:20px;">No customers found.</p>';
+                return;
+            }
+
+            dom.container.innerHTML = processed.map(c => `
+                <a href="customer_details.html?id=${c.id}" class="customer-card">
+                    <div>
+                        <div style="font-weight: 600; font-size: 1.05rem;">${c.name}</div>
+                        <div class="phone-text">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                            ${c.phone || 'No Phone'}
+                        </div>
+                    </div>
+                    <svg style="color: #ccc;" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </a>
+            `).join('');
+        }
+
+        // --- 3. INIT ---
+        dom.search.addEventListener('input', renderList);
+        dom.sort.addEventListener('change', renderList);
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadCustomers();
+            setupRealtime();
+        });
+
+    </script>
+</body>
+</html>
