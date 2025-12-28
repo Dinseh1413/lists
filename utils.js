@@ -57,7 +57,7 @@ function getThemeIcon(isDark) {
         : `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
 }
 
-// 4. CORE LOAN CALCULATOR (UPDATED: Running Month Logic)
+// 4. CORE LOAN CALCULATOR (FIXED: Handles payment on due date)
 function calculateLoanOutstanding(loan, transactions) {
     const loanTxns = transactions
         .filter(t => t.loan_id === loan.id)
@@ -65,9 +65,9 @@ function calculateLoanOutstanding(loan, transactions) {
 
     const monthlyRate = (loan.interest_rate / 100) / 12;
     const startDate = new Date(loan.start_date);
+    startDate.setHours(0,0,0,0); // Normalize time
     
-    // Determine cutoff: Today or Closed Date
-    // Set time to end of day to include all transactions of that day
+    // Determine cutoff
     const endDate = loan.status === 'Closed' && loan.closed_date ? new Date(loan.closed_date) : new Date();
     endDate.setHours(23, 59, 59, 999); 
     
@@ -79,13 +79,14 @@ function calculateLoanOutstanding(loan, transactions) {
     
     let txnIndex = 0;
     let monthCount = 1;
-    let lastDueDate = new Date(startDate); // Track the last processed due date
+    let lastDueDate = new Date(startDate);
 
-    // 1. LOOP: Calculate Completed Months
+    // 1. COMPLETED MONTHS LOOP
     while (true) {
         // Calculate the next Anniversary Date
         let dueDate = new Date(startDate);
         dueDate.setMonth(startDate.getMonth() + monthCount);
+        dueDate.setHours(0,0,0,0); // Normalize time
         
         // Handle Month End Snap (e.g. Jan 31 -> Feb 28)
         if (dueDate.getDate() !== startDate.getDate()) {
@@ -97,9 +98,9 @@ function calculateLoanOutstanding(loan, transactions) {
             break;
         }
 
-        lastDueDate = dueDate; // Update tracker
+        lastDueDate = dueDate;
 
-        // Accrue Interest
+        // Accrue Interest for this period
         const interestForThisMonth = currentPrincipal * monthlyRate;
         totalInterestAccrued += interestForThisMonth;
         
@@ -109,30 +110,37 @@ function calculateLoanOutstanding(loan, transactions) {
             interest: interestForThisMonth
         });
 
-        // Process payments made BEFORE this due date
-        while (txnIndex < loanTxns.length && new Date(loanTxns[txnIndex].txn_date) < dueDate) {
-            const t = loanTxns[txnIndex];
-            if (t.txn_type === 'Interest Payment') totalInterestPaid += t.amount;
-            else if (t.txn_type === 'Principal Repayment') {
-                currentPrincipal -= t.amount;
-                totalPrincipalPaid += t.amount;
+        // --- THE FIX IS HERE ---
+        // Process payments made ON or BEFORE this due date
+        // (Using <= ensures payment on 20 Dec reduces principal for the NEXT cycle)
+        while (txnIndex < loanTxns.length) {
+            const tDate = new Date(loanTxns[txnIndex].txn_date);
+            tDate.setHours(0,0,0,0);
+
+            if (tDate <= dueDate) {
+                const t = loanTxns[txnIndex];
+                if (t.txn_type === 'Interest Payment') totalInterestPaid += t.amount;
+                else if (t.txn_type === 'Principal Repayment') {
+                    currentPrincipal -= t.amount;
+                    totalPrincipalPaid += t.amount;
+                }
+                txnIndex++;
+            } else {
+                break; // Transaction is in the future relative to this due date
             }
-            txnIndex++;
         }
         
         monthCount++;
     }
 
-    // 2. CHECK: Running Month Logic
-    // If the endDate (Today) is AFTER the lastDueDate we processed, 
-    // it means we have entered a NEW month. Charge for it immediately.
-    // (But skip if loan is Closed)
+    // 2. RUNNING MONTH LOGIC
+    // If we passed the last due date, charge for the running month using the NEW principal
     if (loan.status !== 'Closed' && endDate > lastDueDate) {
-        // Calculate the "Running" due date (Next Month)
         let runningDueDate = new Date(startDate);
         runningDueDate.setMonth(startDate.getMonth() + monthCount);
         if (runningDueDate.getDate() !== startDate.getDate()) runningDueDate.setDate(0);
 
+        // This uses 'currentPrincipal' which has been correctly reduced by the loop above
         const interestForRunningMonth = currentPrincipal * monthlyRate;
         totalInterestAccrued += interestForRunningMonth;
 
@@ -143,7 +151,7 @@ function calculateLoanOutstanding(loan, transactions) {
         });
     }
 
-    // 3. Process remaining transactions (that happened recently)
+    // 3. Process any remaining transactions (that happened recently after calculation)
     while (txnIndex < loanTxns.length) {
          const t = loanTxns[txnIndex];
          if (t.txn_type === 'Interest Payment') totalInterestPaid += t.amount;
