@@ -57,7 +57,7 @@ function getThemeIcon(isDark) {
         : `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
 }
 
-// 4. CORE LOAN CALCULATOR (UPDATED: Date-to-Date Logic)
+// 4. CORE LOAN CALCULATOR (UPDATED: Running Month Logic)
 function calculateLoanOutstanding(loan, transactions) {
     const loanTxns = transactions
         .filter(t => t.loan_id === loan.id)
@@ -67,8 +67,9 @@ function calculateLoanOutstanding(loan, transactions) {
     const startDate = new Date(loan.start_date);
     
     // Determine cutoff: Today or Closed Date
+    // Set time to end of day to include all transactions of that day
     const endDate = loan.status === 'Closed' && loan.closed_date ? new Date(loan.closed_date) : new Date();
-    endDate.setHours(23, 59, 59, 999); // Include the full end day
+    endDate.setHours(23, 59, 59, 999); 
     
     let currentPrincipal = loan.principal_amount;
     let totalInterestAccrued = 0;
@@ -78,7 +79,9 @@ function calculateLoanOutstanding(loan, transactions) {
     
     let txnIndex = 0;
     let monthCount = 1;
+    let lastDueDate = new Date(startDate); // Track the last processed due date
 
+    // 1. LOOP: Calculate Completed Months
     while (true) {
         // Calculate the next Anniversary Date
         let dueDate = new Date(startDate);
@@ -89,21 +92,24 @@ function calculateLoanOutstanding(loan, transactions) {
             dueDate.setDate(0); 
         }
 
-        // Stop if the due date is in the future
-        if (dueDate > endDate) break;
+        // STOP if the due date is in the future
+        if (dueDate > endDate) {
+            break;
+        }
 
-        // 1. Accrue Interest for this period
+        lastDueDate = dueDate; // Update tracker
+
+        // Accrue Interest
         const interestForThisMonth = currentPrincipal * monthlyRate;
         totalInterestAccrued += interestForThisMonth;
         
-        // Add to breakdown
         breakdown.push({
             date: dueDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
             principal: currentPrincipal,
             interest: interestForThisMonth
         });
 
-        // 2. Process payments made BEFORE this due date
+        // Process payments made BEFORE this due date
         while (txnIndex < loanTxns.length && new Date(loanTxns[txnIndex].txn_date) < dueDate) {
             const t = loanTxns[txnIndex];
             if (t.txn_type === 'Interest Payment') totalInterestPaid += t.amount;
@@ -117,7 +123,27 @@ function calculateLoanOutstanding(loan, transactions) {
         monthCount++;
     }
 
-    // Process any remaining transactions after the last interest accrual
+    // 2. CHECK: Running Month Logic
+    // If the endDate (Today) is AFTER the lastDueDate we processed, 
+    // it means we have entered a NEW month. Charge for it immediately.
+    // (But skip if loan is Closed)
+    if (loan.status !== 'Closed' && endDate > lastDueDate) {
+        // Calculate the "Running" due date (Next Month)
+        let runningDueDate = new Date(startDate);
+        runningDueDate.setMonth(startDate.getMonth() + monthCount);
+        if (runningDueDate.getDate() !== startDate.getDate()) runningDueDate.setDate(0);
+
+        const interestForRunningMonth = currentPrincipal * monthlyRate;
+        totalInterestAccrued += interestForRunningMonth;
+
+        breakdown.push({
+            date: runningDueDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) + " (Running)",
+            principal: currentPrincipal,
+            interest: interestForRunningMonth
+        });
+    }
+
+    // 3. Process remaining transactions (that happened recently)
     while (txnIndex < loanTxns.length) {
          const t = loanTxns[txnIndex];
          if (t.txn_type === 'Interest Payment') totalInterestPaid += t.amount;
@@ -132,7 +158,7 @@ function calculateLoanOutstanding(loan, transactions) {
         principal: loan.principal_amount - totalPrincipalPaid,
         interest: totalInterestAccrued - totalInterestPaid,
         total: (loan.principal_amount - totalPrincipalPaid) + (totalInterestAccrued - totalInterestPaid),
-        breakdown: breakdown // Now available for the Details page!
+        breakdown: breakdown
     };
 }
 
