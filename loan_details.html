@@ -5,7 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Loan Ledger</title>
     <link rel="stylesheet" href="style.css">
-    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase.js"></script>
+    <script src="utils.js"></script>
+
     <style>
         /* Status Badge */
         .loan-status-badge {
@@ -14,76 +17,45 @@
             margin-bottom: 1rem; text-align: center;
         }
         .status-Active { background-color: var(--success-color); }
-        .status-Closed { background-color: var(--secondary-color); }
+        .status-Closed { background-color: var(--text-light); }
 
-        /* Summary Grid Layout */
-        .summary-grid {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;
-        }
-        .summary-item strong {
-            display: block; font-size: 0.85rem; color: var(--text-light);
-            text-transform: uppercase; margin-bottom: 0.25rem;
-        }
-        .summary-item span { font-size: 1.1rem; font-weight: 600; }
-
-        /* Outstanding Grid */
-        .outstanding-grid {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; text-align: center;
-        }
+        /* Grids */
+        .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+        .outstanding-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; text-align: center; }
         .outstanding-item { background: var(--bg-color); padding: 1rem; border-radius: 8px; }
-        .outstanding-item strong { display: block; color: var(--text-light); font-size: 0.9rem; margin-bottom: 0.5rem; }
-        .outstanding-item span { font-size: 1.3rem; font-weight: 700; }
-
-        /* Total Due Box */
+        
         .total-due {
             margin-top: 1rem; text-align: center; background: var(--secondary-color);
             color: white; padding: 1.5rem; border-radius: 8px;
         }
         .total-due span { display: block; font-size: 2.2rem; font-weight: 700; }
 
-        /* Breakdown Table - Scrollable */
-        .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 1rem; }
-        .breakdown-table { width: 100%; min-width: 500px; border-collapse: collapse; }
-        .breakdown-table th { text-align: left; color: var(--text-light); font-size: 0.85rem; padding: 8px; border-bottom: 1px solid var(--border-color); }
-        .breakdown-table td { padding: 10px 8px; border-bottom: 1px solid #eee; font-size: 0.95rem; }
-        .breakdown-table td:not(:first-child), .breakdown-table th:not(:first-child) { text-align: right; }
-
-        /* Transaction List */
-        .txn-item {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 12px 0; border-bottom: 1px solid #eee;
-        }
-        .txn-val { font-weight: 700; font-family: monospace; font-size: 1.1rem; }
-        .val-int { color: var(--success-color); } /* Green for Interest */
-        .val-prin { color: var(--secondary-color); } /* Red for Principal */
-
-        /* Disabled State for Closed Loans */
+        .table-wrapper { overflow-x: auto; margin-top: 1rem; }
+        table { width: 100%; border-collapse: collapse; min-width: 500px; }
+        th, td { padding: 10px; border-bottom: 1px solid var(--border-color); text-align: left; }
+        
         .loan-closed-overlay { opacity: 0.5; pointer-events: none; }
     </style>
-
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="supabase.js"></script>
-    <script src="utils.js"></script>
 </head>
 <body>
 
     <main class="container">
-        <h1 style="margin-bottom: 0.5rem;">Loan Ledger</h1>
+        <h1>Loan Ledger</h1>
         <div style="text-align: center;">
-            <div id="status-badge" class="loan-status-badge status-Active">Loading...</div>
+            <div id="status-badge" class="loan-status-badge">Loading...</div>
         </div>
 
         <section class="card">
             <h2>Loan Summary</h2>
             <div class="summary-grid">
-                <div class="summary-item"><strong>Customer</strong> <span id="s-name">...</span></div>
-                <div class="summary-item"><strong>Phone</strong> <span id="s-phone">...</span></div>
-                <div class="summary-item"><strong>Principal</strong> <span id="s-principal">...</span></div>
-                <div class="summary-item"><strong>Interest Rate</strong> <span id="s-rate">...</span></div>
-                <div class="summary-item"><strong>Start Date</strong> <span id="s-date">...</span></div>
-                <div class="summary-item"><strong>Articles</strong> <span id="s-articles">...</span></div>
-                <div class="summary-item"><strong>Gross Wt</strong> <span id="s-gross">...</span></div>
-                <div class="summary-item"><strong>Net Wt</strong> <span id="s-net">...</span></div>
+                <div><strong>Customer:</strong> <span id="s-name">...</span></div>
+                <div><strong>Phone:</strong> <span id="s-phone">...</span></div>
+                <div><strong>Principal:</strong> <span id="s-principal">...</span></div>
+                <div><strong>Rate:</strong> <span id="s-rate">...</span></div>
+                <div><strong>Start Date:</strong> <span id="s-date">...</span></div>
+                <div><strong>Articles:</strong> <span id="s-articles">...</span></div>
+                <div><strong>Gross Wt:</strong> <span id="s-gross">...</span></div>
+                <div><strong>Net Wt:</strong> <span id="s-net">...</span></div>
             </div>
         </section>
 
@@ -103,22 +75,20 @@
                 <strong>Total Amount Due</strong>
                 <span id="out-total">...</span>
             </div>
-            <p style="text-align: center; margin-top: 10px; font-size: 0.85rem; color: #888;" id="calc-date-label">...</p>
         </section>
 
         <section class="card">
-            <h2>Interest Breakdown</h2>
+            <h2>Interest Breakdown (Monthly)</h2>
             <div class="table-wrapper">
-                <table class="breakdown-table">
+                <table>
                     <thead>
                         <tr>
-                            <th>Month</th>
-                            <th>Start Principal</th>
-                            <th>Interest Accrued</th>
+                            <th>Due Date</th>
+                            <th style="text-align:right">Principal</th>
+                            <th style="text-align:right">Interest</th>
                         </tr>
                     </thead>
-                    <tbody id="breakdown-body">
-                        </tbody>
+                    <tbody id="breakdown-body"></tbody>
                 </table>
             </div>
         </section>
@@ -126,26 +96,24 @@
         <section class="card" id="add-txn-card">
             <h2>Add Transaction</h2>
             <form id="txn-form">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-                    <div class="form-group">
-                        <label>Date</label>
-                        <input type="date" id="t-date" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Amount</label>
-                        <input type="number" id="t-amount" step="0.01" placeholder="0.00" required>
-                    </div>
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" id="t-date" required>
+                </div>
+                <div class="form-group">
+                    <label>Amount</label>
+                    <input type="number" id="t-amount" step="0.01" required>
                 </div>
                 <div class="form-group">
                     <label>Type</label>
                     <select id="t-type">
-                        <option value="Interest Payment">Interest Payment</option>
-                        <option value="Principal Repayment">Principal Repayment</option>
+                        <option>Interest Payment</option>
+                        <option>Principal Repayment</option>
                     </select>
                 </div>
                 <div class="form-group">
                     <label>Note</label>
-                    <input type="text" id="t-note" placeholder="Optional note...">
+                    <input type="text" id="t-note">
                 </div>
                 <button type="submit" class="btn-primary" id="add-btn">Add Transaction</button>
             </form>
@@ -153,221 +121,113 @@
 
         <section class="card">
             <h2>Transaction History</h2>
-            <div id="txn-history-list">
-                </div>
+            <div id="txn-history-list"></div>
         </section>
 
         <section class="card" id="action-card">
             <h2>Actions</h2>
-            <button id="close-loan-btn" class="btn-danger" style="width: 100%;">Close This Loan</button>
+            <button id="close-loan-btn" class="btn-danger">Close This Loan</button>
         </section>
 
     </main>
 
     <nav class="bottom-nav">
-        <a href="dashboard.html" class="nav-item">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
-            Dashboard
-        </a>
-        <a href="loan_list.html" class="nav-item active">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
-            Loans
-        </a>
-        <a href="customer_list.html" class="nav-item">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-            Customers
-        </a>
-        <a href="pj.html" class="nav-item">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
-            PJ List
-        </a>
+        <a href="dashboard.html" class="nav-item"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg> Dashboard</a>
+        <a href="loan_list.html" class="nav-item active"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg> Loans</a>
+        <a href="customer_list.html" class="nav-item"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg> Customers</a>
+        <a href="pj.html" class="nav-item"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg> PJ List</a>
     </nav>
     <div id="toast-container"></div>
 
     <script>
-        // --- 1. CONFIG & STATE ---
         const params = new URLSearchParams(window.location.search);
-        const loanId = params.get('id');
+        const loanId = params.get('id') || params.get('loan_id'); // Handle both
         let g_loan = null;
 
-        // --- 2. MAIN LOGIC ---
         async function loadData() {
-            if (!loanId) {
-                document.querySelector('.container').innerHTML = '<h2>Error: No Loan ID</h2>';
-                return;
-            }
+            if (!loanId) return;
 
-            // Fetch Loan (with Customer) and Transactions
+            // Fetch Loan & Transactions
             const [lRes, tRes] = await Promise.all([
                 sbClient.from('loans').select('*, customers(*)').eq('id', loanId).single(),
-                sbClient.from('loan_transactions').select('*').eq('loan_id', loanId).order('txn_date', { ascending: true }) // Fetch Oldest First for Calculation
+                sbClient.from('loan_transactions').select('*').eq('loan_id', loanId).order('txn_date', { ascending: true })
             ]);
 
-            if (lRes.error) {
-                showToast(lRes.error.message, 'error');
-                return;
-            }
+            if (lRes.error) { showToast(lRes.error.message, 'error'); return; }
 
             g_loan = lRes.data;
             const transactions = tRes.data || [];
 
-            renderSummary(g_loan);
+            // 1. Render Header
+            document.getElementById('s-name').textContent = g_loan.customers?.name;
+            document.getElementById('s-phone').textContent = g_loan.customers?.phone;
+            document.getElementById('s-principal').textContent = currencyFormatter.format(g_loan.principal_amount);
+            document.getElementById('s-rate').textContent = g_loan.interest_rate + '%';
+            document.getElementById('s-date').textContent = dateFormatter(g_loan.start_date);
+            document.getElementById('s-articles').textContent = g_loan.articles || '-';
+            document.getElementById('s-gross').textContent = g_loan.gross || '-';
+            document.getElementById('s-net').textContent = g_loan.net || '-';
+
+            // 2. Calculate using UTILS (Shared Logic)
+            // This function now returns the breakdown array too!
+            const calc = calculateLoanOutstanding(g_loan, transactions);
             
-            // Perform Calculation (This logic is specific to this page to generate the breakdown table)
-            const calcResult = calculateLedger(g_loan, transactions);
-            
-            renderBalance(calcResult);
-            renderBreakdownTable(calcResult.breakdown);
-            renderTransactionHistory(transactions);
-            renderStatus(g_loan);
-        }
+            document.getElementById('out-prin').textContent = currencyFormatter.format(calc.principal);
+            document.getElementById('out-int').textContent = currencyFormatter.format(calc.interest);
+            document.getElementById('out-total').textContent = currencyFormatter.format(calc.total);
 
-        // --- 3. CALCULATION ENGINE (Supports Breakdown Table) ---
-        function calculateLedger(loan, transactions) {
-            const monthlyRate = (loan.interest_rate / 100) / 12;
-            const startDate = new Date(loan.start_date);
-            // End date is today, or the closed date if the loan is closed
-            const endDate = loan.status === 'Closed' && loan.closed_date ? new Date(loan.closed_date) : new Date();
-            
-            let currentPrincipal = loan.principal_amount;
-            let totalInterestAccrued = 0;
-            let totalInterestPaid = 0;
-            let totalPrincipalPaid = 0;
-            
-            let breakdown = [];
-            let txnIndex = 0;
-            
-            // Start calculation from the 1st of the start month
-            let calcDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-
-            // Loop until we pass the end date
-            while (calcDate <= endDate) {
-                // 1. Calculate Interest for this month
-                const interestForThisMonth = currentPrincipal * monthlyRate;
-                totalInterestAccrued += interestForThisMonth;
-
-                // 2. Add to breakdown list
-                breakdown.push({
-                    month: calcDate.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }),
-                    startPrincipal: currentPrincipal,
-                    interest: interestForThisMonth
-                });
-
-                // 3. Move to next month
-                const nextMonth = new Date(calcDate.getFullYear(), calcDate.getMonth() + 1, 1);
-
-                // 4. Process transactions falling in this month
-                while (txnIndex < transactions.length) {
-                    const t = transactions[txnIndex];
-                    const tDate = new Date(t.txn_date);
-                    
-                    if (tDate >= nextMonth) break; // Transaction is in future months
-
-                    if (t.txn_type === 'Interest Payment') {
-                        totalInterestPaid += t.amount;
-                    } else if (t.txn_type === 'Principal Repayment') {
-                        currentPrincipal -= t.amount;
-                        totalPrincipalPaid += t.amount;
-                    }
-                    txnIndex++;
-                }
-                
-                calcDate = nextMonth;
-            }
-
-            return {
-                outstandingPrincipal: loan.principal_amount - totalPrincipalPaid,
-                outstandingInterest: totalInterestAccrued - totalInterestPaid,
-                totalDue: (loan.principal_amount - totalPrincipalPaid) + (totalInterestAccrued - totalInterestPaid),
-                breakdown: breakdown
-            };
-        }
-
-        // --- 4. RENDERERS ---
-        function renderSummary(loan) {
-            document.getElementById('s-name').textContent = loan.customers?.name || 'Unknown';
-            document.getElementById('s-phone').textContent = loan.customers?.phone || 'N/A';
-            document.getElementById('s-principal').textContent = currencyFormatter.format(loan.principal_amount);
-            document.getElementById('s-rate').textContent = loan.interest_rate + '% p.a.';
-            document.getElementById('s-date').textContent = dateFormatter(loan.start_date);
-            document.getElementById('s-articles').textContent = loan.articles || '-';
-            document.getElementById('s-gross').textContent = loan.gross ? loan.gross + ' g' : '-';
-            document.getElementById('s-net').textContent = loan.net ? loan.net + ' g' : '-';
-        }
-
-        function renderBalance(res) {
-            document.getElementById('out-prin').textContent = currencyFormatter.format(res.outstandingPrincipal);
-            document.getElementById('out-int').textContent = currencyFormatter.format(res.outstandingInterest);
-            document.getElementById('out-total').textContent = currencyFormatter.format(res.totalDue);
-            document.getElementById('calc-date-label').textContent = `Calculated as of ${dateFormatter(new Date().toISOString())}`;
-        }
-
-        function renderBreakdownTable(list) {
+            // 3. Render Breakdown Table
             const tbody = document.getElementById('breakdown-body');
-            if (list.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">No interest accrued yet.</td></tr>';
-                return;
+            if(calc.breakdown.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center">No interest accrued yet (Wait for 1 month).</td></tr>';
+            } else {
+                tbody.innerHTML = calc.breakdown.map(row => `
+                    <tr>
+                        <td>${row.date}</td>
+                        <td style="text-align:right">${currencyFormatter.format(row.principal)}</td>
+                        <td style="text-align:right; color:var(--success-color)">+${currencyFormatter.format(row.interest)}</td>
+                    </tr>
+                `).join('');
             }
-            tbody.innerHTML = list.map(row => `
-                <tr>
-                    <td>${row.month}</td>
-                    <td>${currencyFormatter.format(row.startPrincipal)}</td>
-                    <td style="color: var(--success-color); font-weight:600;">+${currencyFormatter.format(row.interest)}</td>
-                </tr>
-            `).join('');
-        }
 
-        function renderTransactionHistory(list) {
-            // Sort by Date Descending for display (Newest on top)
-            const displayList = [...list].sort((a, b) => new Date(b.txn_date) - new Date(a.txn_date));
-            const container = document.getElementById('txn-history-list');
+            // 4. Render Transactions (Newest First)
+            const histContainer = document.getElementById('txn-history-list');
+            const displayTxns = [...transactions].sort((a,b) => new Date(b.txn_date) - new Date(a.txn_date));
             
-            if (displayList.length === 0) {
-                container.innerHTML = '<p style="text-align:center; color:#999;">No transactions yet.</p>';
-                return;
-            }
-
-            container.innerHTML = displayList.map(t => {
-                const isInt = t.txn_type === 'Interest Payment';
-                return `
-                <div class="txn-item">
-                    <div>
-                        <div style="font-weight:600;">${dateFormatter(t.txn_date)}</div>
-                        <div style="font-size:0.85rem; color:#666;">
-                            ${t.txn_type} ${t.note ? ' - ' + t.note : ''}
+            if(displayTxns.length === 0) histContainer.innerHTML = '<p style="text-align:center">No transactions.</p>';
+            else {
+                histContainer.innerHTML = displayTxns.map(t => `
+                    <div class="list-item" style="cursor:default">
+                        <div>
+                            <div style="font-weight:600">${dateFormatter(t.txn_date)}</div>
+                            <small>${t.txn_type} ${t.note ? '- '+t.note : ''}</small>
+                        </div>
+                        <div style="font-weight:700; color:${t.txn_type.includes('Int')?'var(--success-color)':'var(--secondary-color)'}">
+                            -${currencyFormatter.format(t.amount)}
                         </div>
                     </div>
-                    <div class="txn-val ${isInt ? 'val-int' : 'val-prin'}">
-                        -${currencyFormatter.format(t.amount)}
-                    </div>
-                </div>`;
-            }).join('');
-        }
+                `).join('');
+            }
 
-        function renderStatus(loan) {
+            // 5. Status
             const badge = document.getElementById('status-badge');
-            badge.textContent = loan.status;
-            badge.className = `loan-status-badge status-${loan.status}`;
-
-            // If Closed, disable inputs
-            if (loan.status === 'Closed') {
+            badge.textContent = g_loan.status;
+            badge.className = `loan-status-badge status-${g_loan.status}`;
+            
+            if(g_loan.status === 'Closed') {
                 document.getElementById('add-txn-card').classList.add('loan-closed-overlay');
                 document.getElementById('add-btn').disabled = true;
-                document.getElementById('add-btn').textContent = 'Loan Closed';
-                
                 document.getElementById('action-card').classList.add('loan-closed-overlay');
                 document.getElementById('close-loan-btn').disabled = true;
             }
         }
 
-        // --- 5. EVENT HANDLERS ---
-        
         // Add Transaction
         document.getElementById('txn-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const btn = document.getElementById('add-btn');
             btn.textContent = 'Saving...'; btn.disabled = true;
-
+            
             const { error } = await sbClient.from('loan_transactions').insert({
                 loan_id: loanId,
                 txn_date: document.getElementById('t-date').value,
@@ -375,44 +235,33 @@
                 txn_type: document.getElementById('t-type').value,
                 note: document.getElementById('t-note').value
             });
-
-            if (error) {
-                showToast(error.message, 'error');
-                btn.textContent = 'Add Transaction'; btn.disabled = false;
-            } else {
-                showToast('Transaction added!', 'success');
+            
+            if(error) { showToast(error.message, 'error'); }
+            else { 
+                showToast('Added!', 'success'); 
                 document.getElementById('t-amount').value = '';
                 document.getElementById('t-note').value = '';
-                btn.textContent = 'Add Transaction'; btn.disabled = false;
-                loadData(); // Reload to update math
+                loadData(); 
             }
+            btn.textContent = 'Add Transaction'; btn.disabled = false;
         });
 
         // Close Loan
         document.getElementById('close-loan-btn').addEventListener('click', async () => {
-            if (!confirm('Are you sure you want to CLOSE this loan? This action cannot be undone.')) return;
-            
+            if(!confirm('Close this loan?')) return;
             const btn = document.getElementById('close-loan-btn');
-            btn.textContent = 'Closing...'; btn.disabled = true;
-
-            const todayStr = new Date().toISOString().split('T')[0];
+            btn.textContent = 'Closing...';
+            
             const { error } = await sbClient.from('loans')
-                .update({ status: 'Closed', closed_date: todayStr })
+                .update({ status: 'Closed', closed_date: new Date().toISOString().split('T')[0] })
                 .eq('id', loanId);
-
-            if (error) {
-                showToast(error.message, 'error');
-                btn.textContent = 'Close This Loan'; btn.disabled = false;
-            } else {
-                showToast('Loan Closed Successfully', 'success');
-                loadData(); // Reload UI
-            }
+                
+            if(error) showToast(error.message, 'error');
+            else { showToast('Loan Closed', 'success'); loadData(); }
         });
 
-        // Init
         document.getElementById('t-date').value = new Date().toISOString().split('T')[0];
         document.addEventListener('DOMContentLoaded', loadData);
-
     </script>
 </body>
 </html>
