@@ -8,6 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase.js"></script>
     <script src="utils.js"></script>
+
     <style>
         /* Specific Dashboard Styles */
         .highlight-card {
@@ -140,6 +141,7 @@
             PJ List
         </a>
     </nav>
+    <div id="toast-container"></div>
 
     <script>
         // Config
@@ -164,49 +166,7 @@
             pjTotalActive: document.getElementById('pj-total-active')
         };
         
-        // --- 1. LOAN LOGIC (Matches loan_details.html) ---
-        function calculateSingleLoanOutstanding(loan, transactions) {
-            const loanTransactions = transactions
-                .filter(t => t.loan_id === loan.id)
-                .sort((a, b) => new Date(a.txn_date) - new Date(b.txn_date)); 
-
-            const monthlyRate = (loan.interest_rate / 100) / 12;
-            const startDate = new Date(loan.start_date);
-            const today = new Date();
-            
-            let currentPrincipal = loan.principal_amount;
-            let totalInterestAccrued = 0;
-            let totalInterestPaid = 0;
-            let totalPrincipalPaid = 0;
-            let txnIndex = 0;
-            let calcDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-
-            while (calcDate <= today) {
-                // Accrue Interest
-                totalInterestAccrued += (currentPrincipal * monthlyRate);
-                
-                const nextMonth = new Date(calcDate.getFullYear(), calcDate.getMonth() + 1, 1);
-                
-                // Process Payments
-                while (txnIndex < loanTransactions.length && new Date(loanTransactions[txnIndex].txn_date) < nextMonth) {
-                    const txn = loanTransactions[txnIndex];
-                    if (txn.txn_type === 'Interest Payment') totalInterestPaid += txn.amount;
-                    else if (txn.txn_type === 'Principal Repayment') {
-                        currentPrincipal -= txn.amount; 
-                        totalPrincipalPaid += txn.amount;
-                    }
-                    txnIndex++;
-                }
-                calcDate = nextMonth;
-            }
-            
-            return { 
-                principal: loan.principal_amount - totalPrincipalPaid, 
-                interest: totalInterestAccrued - totalInterestPaid 
-            };
-        }
-
-        // --- 2. PJ LOGIC (Matches pj.html) ---
+        // --- 1. PJ Logic (Matches pj.html 15-day rule) ---
         function calculatePjInterestMonths(startDateStr) {
             const parts = startDateStr.split('-');
             const start = new Date(parts[0], parts[1] - 1, parts[2]); 
@@ -223,7 +183,7 @@
 
             if (days < 0) totalMonths--;
 
-            // Simplified 15-day logic from previous file
+            // Simplified 15-day logic
             const tempDate = new Date(start);
             tempDate.setMonth(tempDate.getMonth() + totalMonths);
             const diffTime = Math.abs(today - tempDate);
@@ -252,11 +212,14 @@
                 }
 
                 // --- CALC: LOANS ---
+                // REPLACED OLD LOGIC WITH SHARED UTILS FUNCTION
                 let loanPrincipalTotal = 0;
                 let loanInterestTotal = 0;
 
                 activeLoans.data.forEach(loan => {
-                    const result = calculateSingleLoanOutstanding(loan, transactions);
+                    // Using the new, corrected function from utils.js
+                    // This now respects the "Running Month" logic
+                    const result = calculateLoanOutstanding(loan, transactions);
                     loanPrincipalTotal += result.principal;
                     loanInterestTotal += result.interest;
                 });
@@ -300,6 +263,7 @@
 
             } catch (error) {
                 console.error("Dashboard Error", error);
+                showToast("Error loading dashboard data", "error");
                 dom.netBalance.textContent = "Error";
             }
         }
