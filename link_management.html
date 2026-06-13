@@ -20,9 +20,10 @@
             box-shadow: var(--shadow);
         }
 
-        @media (min-width: 600px) {
+        /* Update to fit 4 columns on desktop */
+        @media (min-width: 800px) {
             .controls-container {
-                grid-template-columns: 2fr 1fr 1fr;
+                grid-template-columns: 1.5fr 1fr 1fr 1fr; 
             }
         }
 
@@ -96,7 +97,7 @@
 </head>
 <body>
 
-    <main class="container">
+    <main class="container" style="max-width: 1000px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
             <h1 style="margin: 0;">Manage Locations</h1>
         </div>
@@ -113,6 +114,14 @@
                     <option value="shop">Shop</option>
                     <option value="pj">PJ</option>
                     <option value="inside">Inside</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+                <label for="linkedFilter">Link Status</label>
+                <select id="linkedFilter">
+                    <option value="all">All Links</option>
+                    <option value="linked">Linked Only</option>
+                    <option value="unlinked">Unlinked Only</option>
                 </select>
             </div>
             <div class="form-group" style="margin-bottom:0;">
@@ -198,6 +207,7 @@
 
             const searchInput = document.getElementById('searchInput').value.toLowerCase();
             const locationFilter = document.getElementById('locationFilter').value;
+            const linkedFilter = document.getElementById('linkedFilter').value; // NEW
             const sortFilter = document.getElementById('sortFilter').value;
             const tbody = document.getElementById('linkTableBody');
             
@@ -208,7 +218,14 @@
                 const custName = loan.customers?.name?.toLowerCase() || '';
                 const matchesSearch = String(loan.id).includes(searchInput) || custName.includes(searchInput);
                 const matchesLocation = locationFilter === 'all' || loan.location === locationFilter;
-                return matchesSearch && matchesLocation;
+                
+                // NEW: Linked Match Logic
+                let linkMatch = true;
+                const isLinked = loan.pj_no !== null && loan.pj_no !== undefined;
+                if (linkedFilter === 'linked' && !isLinked) linkMatch = false;
+                if (linkedFilter === 'unlinked' && isLinked) linkMatch = false;
+
+                return matchesSearch && matchesLocation && linkMatch;
             });
 
             // 2. Sort
@@ -325,6 +342,7 @@
         // --- INIT ---
         document.getElementById('searchInput').addEventListener('input', renderTable);
         document.getElementById('locationFilter').addEventListener('change', renderTable);
+        document.getElementById('linkedFilter').addEventListener('change', renderTable); // Trigger render on linked change
         document.getElementById('sortFilter').addEventListener('change', renderTable);
 
         document.addEventListener('DOMContentLoaded', loadData);
