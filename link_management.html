@@ -20,7 +20,7 @@
             box-shadow: var(--shadow);
         }
 
-        /* Update to fit 4 columns on desktop */
+        /* Fit columns on desktop */
         @media (min-width: 800px) {
             .controls-container {
                 grid-template-columns: 1.5fr 1fr 1fr 1fr; 
@@ -40,7 +40,7 @@
         table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 650px; 
+            min-width: 800px; /* Increased to fit new columns */
         }
 
         th, td {
@@ -65,9 +65,10 @@
             background: var(--input-bg);
             color: var(--text-color);
             width: 100%;
+            min-width: 100px;
         }
 
-        /* Tom Select Theme Overrides for consistency */
+        /* Tom Select Theme Overrides */
         .ts-control {
             border: 1px solid var(--border-color);
             border-radius: 6px; padding: 0.6rem; font-size: 0.95rem;
@@ -97,9 +98,9 @@
 </head>
 <body>
 
-    <main class="container" style="max-width: 1000px;">
+    <main class="container" style="max-width: 1100px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-            <h1 style="margin: 0;">Manage Locations</h1>
+            <h1 style="margin: 0;">Manage Locations (Active Loans)</h1>
         </div>
 
         <section class="controls-container">
@@ -141,12 +142,14 @@
                     <tr>
                         <th>ID</th>
                         <th>Customer</th>
+                        <th>Articles</th>
+                        <th>Amount</th>
                         <th>Location</th>
-                        <th style="min-width: 200px;">Assigned PJ Entry</th>
+                        <th style="min-width: 220px;">Assigned PJ Entry</th>
                     </tr>
                 </thead>
                 <tbody id="linkTableBody">
-                    <tr><td colspan="4" style="text-align:center; padding:20px; color:#888;">Loading data...</td></tr>
+                    <tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">Loading data...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -181,10 +184,16 @@
 
         async function loadData() {
             try {
-                // Fetch loans and PJs simultaneously for speed
+                // ONLY FETCH ACTIVE LOANS
+                // Included articles and principal_amount
                 const [loansRes, pjsRes] = await Promise.all([
-                    db.from('loans').select('id, location, pj_no, customers(name)').order('id', { ascending: false }),
-                    db.from('pj').select('pj_id, amount, status').order('pj_id', { ascending: false })
+                    db.from('loans')
+                      .select('id, location, pj_no, principal_amount, articles, customers(name)')
+                      .eq('status', 'Active')
+                      .order('id', { ascending: false }),
+                    db.from('pj')
+                      .select('pj_id, amount, status')
+                      .order('pj_id', { ascending: false })
                 ]);
 
                 if (loansRes.error) throw loansRes.error;
@@ -207,7 +216,7 @@
 
             const searchInput = document.getElementById('searchInput').value.toLowerCase();
             const locationFilter = document.getElementById('locationFilter').value;
-            const linkedFilter = document.getElementById('linkedFilter').value; // NEW
+            const linkedFilter = document.getElementById('linkedFilter').value; 
             const sortFilter = document.getElementById('sortFilter').value;
             const tbody = document.getElementById('linkTableBody');
             
@@ -219,7 +228,6 @@
                 const matchesSearch = String(loan.id).includes(searchInput) || custName.includes(searchInput);
                 const matchesLocation = locationFilter === 'all' || loan.location === locationFilter;
                 
-                // NEW: Linked Match Logic
                 let linkMatch = true;
                 const isLinked = loan.pj_no !== null && loan.pj_no !== undefined;
                 if (linkedFilter === 'linked' && !isLinked) linkMatch = false;
@@ -240,18 +248,22 @@
             });
 
             if (filteredLoans.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">No matching loans.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">No matching loans.</td></tr>';
                 return;
             }
 
             // 3. Render HTML Rows
             filteredLoans.forEach(loan => {
                 const custName = loan.customers ? loan.customers.name : 'Unknown';
+                const amtFormatted = currencyFormatter.format(loan.principal_amount);
+                const articlesText = loan.articles ? loan.articles : '<span style="color:#aaa;">-</span>';
                 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td style="font-weight:600;">#${loan.id}</td>
                     <td>${custName}</td>
+                    <td style="font-size:0.9rem;">${articlesText}</td>
+                    <td style="font-family:monospace; font-weight:600; font-size:1rem;">${amtFormatted}</td>
                     <td>
                         <select class="location-select" onchange="updateLocation(${loan.id}, this.value)">
                             <option value="shop" ${loan.location === 'shop' ? 'selected' : ''}>Shop</option>
@@ -275,7 +287,6 @@
                     valueField: 'pj_id',
                     labelField: 'label',
                     searchField: ['pj_id', 'label'],
-                    // FILTER OUT CLOSED PJs (Unless it's already selected for this loan)
                     options: allPjs
                         .filter(p => p.status === 'Active' || p.pj_id === loan.pj_no)
                         .map(p => ({ 
@@ -283,7 +294,7 @@
                             label: `#${p.pj_id} - ₹${p.amount} (${p.status})` 
                         })),
                     items: loan.pj_no ? [loan.pj_no] : [],
-                    placeholder: isPj ? 'Type Active PJ No...' : 'Not required for this location',
+                    placeholder: isPj ? 'Search PJ...' : 'Not required',
                     maxItems: 1,
                     onChange: function(value) {
                         const numValue = value ? parseInt(value) : null;
@@ -294,7 +305,7 @@
                 });
 
                 if (!isPj) {
-                    ts.disable(); // Gray out the input if it's not a PJ loan
+                    ts.disable(); 
                 }
                 
                 tsInstances[loan.id] = ts;
@@ -305,7 +316,7 @@
 
         window.updateLocation = async (loanId, newLocation) => {
             let updates = { location: newLocation };
-            if (newLocation !== 'pj') updates.pj_no = null; // Auto-unlink if changing away from PJ
+            if (newLocation !== 'pj') updates.pj_no = null; 
 
             const { error } = await db.from('loans').update(updates).eq('id', loanId);
 
@@ -314,14 +325,13 @@
             } else {
                 showToast(`Location updated to ${newLocation}`, "success");
                 
-                // Update memory
                 const loanIndex = allLoans.findIndex(l => l.id === loanId);
                 if (loanIndex !== -1) {
                     allLoans[loanIndex].location = newLocation;
                     if (newLocation !== 'pj') allLoans[loanIndex].pj_no = null;
                 }
                 
-                renderTable(); // Re-render to enable/disable the PJ dropdown
+                renderTable(); 
             }
         };
 
@@ -333,7 +343,6 @@
             } else {
                 showToast(pjNo ? `Linked to PJ #${pjNo}` : "PJ Unlinked", "success");
                 
-                // Update memory silently
                 const loanIndex = allLoans.findIndex(l => l.id === loanId);
                 if (loanIndex !== -1) allLoans[loanIndex].pj_no = pjNo;
             }
@@ -342,7 +351,7 @@
         // --- INIT ---
         document.getElementById('searchInput').addEventListener('input', renderTable);
         document.getElementById('locationFilter').addEventListener('change', renderTable);
-        document.getElementById('linkedFilter').addEventListener('change', renderTable); // Trigger render on linked change
+        document.getElementById('linkedFilter').addEventListener('change', renderTable); 
         document.getElementById('sortFilter').addEventListener('change', renderTable);
 
         document.addEventListener('DOMContentLoaded', loadData);
