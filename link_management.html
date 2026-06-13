@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage PJ Links</title>
+    <!-- Referencing your existing stylesheets and scripts -->
+    <link rel="stylesheet" href="style.css"> 
+</head>
+<body>
+    <header>
+        <h1>Manage Loan & PJ Links</h1>
+        <nav>
+            <a href="dashboard.html">Back to Dashboard</a>
+        </nav>
+    </header>
+
+    <main>
+        <section>
+            <h2>Loans Requiring PJ Links</h2>
+            <table id="linkTable">
+                <thead>
+                    <tr>
+                        <th>Loan ID</th>
+                        <th>Customer</th>
+                        <th>Location</th>
+                        <th>Current PJ No.</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="linkTableBody">
+                    <!-- Rows populated by JS -->
+                </tbody>
+            </table>
+        </section>
+    </main>
+
+    <!-- Referencing your existing Supabase and utility scripts[cite: 1] -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase.js"></script>
+    <script src="utils.js"></script>
+    <script src="link_management.js"></script>
+</body>
+</html>
