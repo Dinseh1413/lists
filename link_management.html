@@ -6,9 +6,9 @@
     <title>Manage Loan Locations & PJ Links</title>
     
     <link rel="stylesheet" href="style.css">
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.default.css" rel="stylesheet">
 
     <style>
-        /* Specific styles for the controls and table on this page */
         .controls-container {
             display: grid;
             grid-template-columns: 1fr;
@@ -22,7 +22,7 @@
 
         @media (min-width: 600px) {
             .controls-container {
-                grid-template-columns: 2fr 1fr;
+                grid-template-columns: 2fr 1fr 1fr;
             }
         }
 
@@ -32,7 +32,8 @@
             box-shadow: var(--shadow);
             overflow-x: auto; 
             -webkit-overflow-scrolling: touch;
-            margin-bottom: 80px; /* Space for bottom nav */
+            margin-bottom: 80px; 
+            min-height: 400px; /* Space for dropdowns to open */
         }
 
         table {
@@ -56,9 +57,8 @@
             white-space: nowrap;
         }
 
-        /* Action elements styling */
-        .location-select, .pj-input {
-            padding: 0.5rem;
+        .location-select {
+            padding: 0.6rem;
             border: 1px solid var(--border-color);
             border-radius: 6px;
             background: var(--input-bg);
@@ -66,34 +66,31 @@
             width: 100%;
         }
 
-        .save-btn {
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: opacity 0.2s;
+        /* Tom Select Theme Overrides for consistency */
+        .ts-control {
+            border: 1px solid var(--border-color);
+            border-radius: 6px; padding: 0.6rem; font-size: 0.95rem;
+            background: var(--input-bg); color: var(--text-color); box-shadow: none;
         }
-
-        .save-btn:disabled {
-            background: var(--border-color);
-            color: var(--text-light);
-            cursor: not-allowed;
+        .ts-wrapper.focus .ts-control {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px var(--primary-light);
         }
-        
-        .pj-input:disabled {
-            background: #eee;
-            cursor: not-allowed;
+        .ts-dropdown {
+            background: var(--card-bg); color: var(--text-color);
+            border: 1px solid var(--border-color); border-radius: 6px;
         }
-        
-        [data-theme="dark"] .pj-input:disabled {
-            background: #222;
+        .ts-dropdown .active {
+            background-color: var(--primary-light); color: var(--text-color);
         }
+        .ts-wrapper.disabled .ts-control {
+            background: #f5f5f5; opacity: 0.6; cursor: not-allowed;
+        }
+        [data-theme="dark"] .ts-wrapper.disabled .ts-control { background: #222; }
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
     <script src="supabase.js"></script>
     <script src="utils.js"></script>
 </head>
@@ -118,6 +115,15 @@
                     <option value="inside">Inside</option>
                 </select>
             </div>
+            <div class="form-group" style="margin-bottom:0;">
+                <label for="sortFilter">Sort By</label>
+                <select id="sortFilter">
+                    <option value="newest">Newest First</option>
+                    <option value="oldest">Oldest First</option>
+                    <option value="name-asc">Name (A-Z)</option>
+                    <option value="name-desc">Name (Z-A)</option>
+                </select>
+            </div>
         </section>
 
         <div class="table-wrapper">
@@ -127,12 +133,11 @@
                         <th>ID</th>
                         <th>Customer</th>
                         <th>Location</th>
-                        <th>PJ No.</th>
-                        <th>Action</th>
+                        <th style="min-width: 200px;">Assigned PJ Entry</th>
                     </tr>
                 </thead>
                 <tbody id="linkTableBody">
-                    <tr><td colspan="5" style="text-align:center; padding:20px; color:#888;">Loading loans...</td></tr>
+                    <tr><td colspan="4" style="text-align:center; padding:20px; color:#888;">Loading data...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -159,53 +164,71 @@
     <div id="toast-container"></div>
 
     <script>
-        // Use the global client initialized in supabase.js
         const db = sbClient; 
 
-        let allLoans = []; // Store data in memory for instant searching
+        let allLoans = [];
+        let allPjs = [];
+        let tsInstances = {}; 
 
-        async function loadAllLoans() {
-            // Fetch loan ID, location, pj_no, and join with customers table to get the name
-            const { data: loans, error } = await db
-                .from('loans')
-                .select('id, location, pj_no, customers(name)')
-                .order('id', { ascending: false });
+        async function loadData() {
+            try {
+                // Fetch loans and PJs simultaneously for speed
+                const [loansRes, pjsRes] = await Promise.all([
+                    db.from('loans').select('id, location, pj_no, customers(name)').order('id', { ascending: false }),
+                    db.from('pj').select('pj_id, amount, status').order('pj_id', { ascending: false })
+                ]);
 
-            if (error) {
-                console.error("Error fetching loans:", error);
-                showToast("Error loading loans", "error");
-                document.getElementById('linkTableBody').innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">Failed to load data.</td></tr>';
-                return;
+                if (loansRes.error) throw loansRes.error;
+                if (pjsRes.error) throw pjsRes.error;
+
+                allLoans = loansRes.data || [];
+                allPjs = pjsRes.data || [];
+                
+                renderTable();
+            } catch (error) {
+                console.error("Error loading data:", error);
+                showToast("Failed to load data.", "error");
             }
-            
-            allLoans = loans || [];
-            renderTable();
         }
 
         function renderTable() {
+            // Destroy existing TomSelect instances to prevent memory leaks
+            Object.values(tsInstances).forEach(ts => ts.destroy());
+            tsInstances = {};
+
             const searchInput = document.getElementById('searchInput').value.toLowerCase();
             const locationFilter = document.getElementById('locationFilter').value;
+            const sortFilter = document.getElementById('sortFilter').value;
             const tbody = document.getElementById('linkTableBody');
             
             tbody.innerHTML = '';
 
-            // 1. Filter the array
-            const filteredLoans = allLoans.filter(loan => {
+            // 1. Filter
+            let filteredLoans = allLoans.filter(loan => {
                 const custName = loan.customers?.name?.toLowerCase() || '';
                 const matchesSearch = String(loan.id).includes(searchInput) || custName.includes(searchInput);
                 const matchesLocation = locationFilter === 'all' || loan.location === locationFilter;
-                
                 return matchesSearch && matchesLocation;
             });
 
+            // 2. Sort
+            filteredLoans.sort((a, b) => {
+                if (sortFilter === 'newest') return b.id - a.id;
+                if (sortFilter === 'oldest') return a.id - b.id;
+                
+                const nameA = (a.customers?.name || '').toLowerCase();
+                const nameB = (b.customers?.name || '').toLowerCase();
+                if (sortFilter === 'name-asc') return nameA.localeCompare(nameB);
+                if (sortFilter === 'name-desc') return nameB.localeCompare(nameA);
+            });
+
             if (filteredLoans.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">No matching loans found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">No matching loans.</td></tr>';
                 return;
             }
 
-            // 2. Generate HTML
+            // 3. Render HTML Rows
             filteredLoans.forEach(loan => {
-                const isPj = loan.location === 'pj';
                 const custName = loan.customers ? loan.customers.name : 'Unknown';
                 
                 const tr = document.createElement('tr');
@@ -220,29 +243,52 @@
                         </select>
                     </td>
                     <td>
-                        <input type="number" class="pj-input" id="pj_input_${loan.id}" value="${loan.pj_no || ''}" 
-                               placeholder="PJ ID" ${!isPj ? 'disabled' : ''}>
-                    </td>
-                    <td>
-                        <button class="save-btn" onclick="savePjLink(${loan.id})" ${!isPj ? 'disabled' : ''}>
-                            Save PJ
-                        </button>
+                        <select id="pj_select_${loan.id}"></select>
                     </td>
                 `;
                 tbody.appendChild(tr);
+            });
+
+            // 4. Initialize Tom Select on the newly created rows
+            filteredLoans.forEach(loan => {
+                const el = document.getElementById(`pj_select_${loan.id}`);
+                const isPj = loan.location === 'pj';
+
+                const ts = new TomSelect(el, {
+                    valueField: 'pj_id',
+                    labelField: 'label',
+                    searchField: ['pj_id', 'label'],
+                    // FILTER OUT CLOSED PJs (Unless it's already selected for this loan)
+                    options: allPjs
+                        .filter(p => p.status === 'Active' || p.pj_id === loan.pj_no)
+                        .map(p => ({ 
+                            pj_id: p.pj_id, 
+                            label: `#${p.pj_id} - ₹${p.amount} (${p.status})` 
+                        })),
+                    items: loan.pj_no ? [loan.pj_no] : [],
+                    placeholder: isPj ? 'Type Active PJ No...' : 'Not required for this location',
+                    maxItems: 1,
+                    onChange: function(value) {
+                        const numValue = value ? parseInt(value) : null;
+                        if (numValue !== loan.pj_no) {
+                            updatePjLink(loan.id, numValue);
+                        }
+                    }
+                });
+
+                if (!isPj) {
+                    ts.disable(); // Gray out the input if it's not a PJ loan
+                }
+                
+                tsInstances[loan.id] = ts;
             });
         }
 
         // --- ACTIONS ---
 
-        // Triggers when the Location dropdown is changed
         window.updateLocation = async (loanId, newLocation) => {
             let updates = { location: newLocation };
-            
-            // If changing away from PJ, automatically unlink the PJ number in the database
-            if (newLocation !== 'pj') {
-                updates.pj_no = null; 
-            }
+            if (newLocation !== 'pj') updates.pj_no = null; // Auto-unlink if changing away from PJ
 
             const { error } = await db.from('loans').update(updates).eq('id', loanId);
 
@@ -251,46 +297,37 @@
             } else {
                 showToast(`Location updated to ${newLocation}`, "success");
                 
-                // Update local memory so we don't have to fetch from DB again immediately
+                // Update memory
                 const loanIndex = allLoans.findIndex(l => l.id === loanId);
                 if (loanIndex !== -1) {
                     allLoans[loanIndex].location = newLocation;
                     if (newLocation !== 'pj') allLoans[loanIndex].pj_no = null;
                 }
                 
-                // Re-render table to instantly disable/enable the PJ inputs
-                renderTable(); 
+                renderTable(); // Re-render to enable/disable the PJ dropdown
             }
         };
 
-        // Triggers when "Save PJ" button is clicked
-        window.savePjLink = async (loanId) => {
-            const pjInput = document.getElementById(`pj_input_${loanId}`);
-            const pjNo = pjInput.value.trim() === '' ? null : parseInt(pjInput.value);
-            
-            const btn = pjInput.parentElement.nextElementSibling.querySelector('button');
-            btn.textContent = '...';
-            btn.disabled = true;
-
+        window.updatePjLink = async (loanId, pjNo) => {
             const { error } = await db.from('loans').update({ pj_no: pjNo }).eq('id', loanId);
 
             if (error) {
-                showToast("Failed to link PJ. Ensure PJ ID exists.", "error");
+                showToast("Failed to link PJ.", "error");
             } else {
-                showToast(`PJ Link saved!`, "success");
+                showToast(pjNo ? `Linked to PJ #${pjNo}` : "PJ Unlinked", "success");
+                
+                // Update memory silently
                 const loanIndex = allLoans.findIndex(l => l.id === loanId);
                 if (loanIndex !== -1) allLoans[loanIndex].pj_no = pjNo;
             }
-
-            btn.textContent = 'Save PJ';
-            btn.disabled = false;
         };
 
         // --- INIT ---
         document.getElementById('searchInput').addEventListener('input', renderTable);
         document.getElementById('locationFilter').addEventListener('change', renderTable);
+        document.getElementById('sortFilter').addEventListener('change', renderTable);
 
-        document.addEventListener('DOMContentLoaded', loadAllLoans);
+        document.addEventListener('DOMContentLoaded', loadData);
     </script>
 </body>
 </html>
